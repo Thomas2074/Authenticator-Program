@@ -2,6 +2,9 @@ import json
 import hashlib
 import os
 import getpass # For securely getting password input without showing it
+import time
+import random
+import threading
 
 # Define the file to store user data
 USERS_FILE = 'users.json'
@@ -129,6 +132,44 @@ def login_user():
         print("Error: Invalid username or password.")
         return False
 
+def remove_user():
+    """Removes an existing user from the users file."""
+    print("\n--- Remove User ---")
+    users = load_users()
+
+    username = input("Enter the username to remove: ").strip()
+
+    if username not in users:
+        print("Error: Username not found.")
+        return
+
+    confirm = input(f"Are you sure you want to permanently delete '{username}'? (yes/NO): ").strip().lower()
+    if confirm != 'yes':
+        print("Aborted. No changes made.")
+        return
+
+    # Remove the user and save
+    try:
+        del users[username]
+        save_users(users)
+        print(f"Successfully removed user: {username}")
+    except Exception as e:
+        print(f"Error removing user: {e}")
+
+def list_users():
+    """Lists all current usernames stored in the users file."""
+    print("\n--- Current Users ---")
+    users = load_users()
+
+    if not users:
+        print("No users found.")
+        return
+
+    # Print usernames, one per line
+    for uname in sorted(users.keys()):
+        print(f"- {uname}")
+
+
 def main():
     """Main application loop."""
     print("Welcome to the Python Authenticator")
@@ -138,8 +179,11 @@ def main():
         print("1. Register a new user")
         print("2. Login")
         print("3. Exit")
+        print("4. Generate 6-digit codes every 30 seconds")
+        print("5. Remove an existing user")
+        print("6. List all current users")
         
-        choice = input("Enter your choice (1, 2, or 3): ").strip()
+        choice = input("Enter your choice (1, 2, 3, 4, 5, or 6): ").strip()
         
         if choice == '1':
             register_user()
@@ -148,8 +192,39 @@ def main():
         elif choice == '3':
             print("Exiting program. Goodbye!")
             break
+        elif choice == '4':
+            # Start the 6-digit code generator in a thread and stop on Enter
+            stop_event = threading.Event()
+
+            def generate_codes(stop_event):
+                print("\nStarting 6-digit code generator. Press Enter to stop.\n")
+                try:
+                    while not stop_event.is_set():
+                        code = str(random.randint(0, 999999)).zfill(6)
+                        print(f"Code: {code} (valid for 30s)")
+                        # wait up to 30 seconds, but return early if stopped
+                        stop_event.wait(30)
+                except Exception:
+                    pass
+                finally:
+                    print("\nCode generator stopped.")
+
+            thread = threading.Thread(target=generate_codes, args=(stop_event,), daemon=True)
+            thread.start()
+            # Wait for user to press Enter to stop the generator
+            try:
+                input()
+            except KeyboardInterrupt:
+                # Allow Ctrl+C to stop as well
+                pass
+            stop_event.set()
+            thread.join()
+        elif choice == '5':
+            remove_user()
+        elif choice == '6':
+            list_users()
         else:
-            print("Invalid choice. Please enter 1, 2, or 3.")
+            print("Invalid choice. Please enter 1, 2, 3, 4, 5, or 6.")
 
 # This ensures the main() function runs only when the script is executed directly
 if __name__ == "__main__":
